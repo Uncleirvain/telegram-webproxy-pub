@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.log
+.env
+*.secret
+*.key
+*tproxy-links*.txt
+users.json
+profiles.json
+.DS_Store
