@@ -29,7 +29,7 @@
 
 ```bash
 sudo apt-get update && sudo apt-get install -y git
-git clone https://github.com/Uncleirvain/telegram-webproxy-oneclick.git
+git clone https://github.com/Uncleirvain/telegram-webproxy-pub.git
 cd telegram-webproxy-oneclick
 sudo bash install.sh
 ```
