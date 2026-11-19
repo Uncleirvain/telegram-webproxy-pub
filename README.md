@@ -30,7 +30,7 @@
 ```bash
 sudo apt-get update && sudo apt-get install -y git
 git clone https://github.com/Uncleirvain/telegram-webproxy-pub.git
-cd telegram-webproxy-oneclick
+cd telegram-webproxy-pub
 sudo bash install.sh
 ```
 
@@ -95,12 +95,12 @@ echo | openssl s_client -connect proxy.example.com:443 -servername proxy.example
 
 ```bash
 sudo traffic-guard full \
-  -u file:///var/lib/telegram-webproxy-oneclick/antiscanner.list
+  -u file:///var/lib/telegram-webproxy-pub/antiscanner.list
 ```
 
 - Источник списка: `shadow-netlab/traffic-guard-lists/public/antiscanner.list`.
 - Ручная проверка IP администратора выполняется до применения правил.
-- Backups: `/var/lib/telegram-webproxy-oneclick/firewall-backups/`.
+- Backups: `/var/lib/telegram-webproxy-pub/firewall-backups/`.
 - Правила iptables/ipset сохраняются штатными механизмами TrafficGuard. Они сосуществуют с локальной nftables-защитой backend, которую ставит Telegram-инсталлятор.
 - **Новые версии blocklist автоматически не подтягиваются.** Повторное применение нового файла необходимо проверять вручную. Защита от сканеров не равна защите от DDoS или DPI.
 
@@ -129,7 +129,7 @@ sudo iptables -S INPUT
 
 ## Обновления и воспроизводимость
 
-Обёртка не обновляет работающую установку и не содержит функцию автоматического удаления: это исключает незаметную ротацию ключа, base path или изменение Caddyfile. Сначала тестируйте любые обновления на новой VM. Конкретные upstream revisions записываются после установки в `/var/lib/telegram-webproxy-oneclick/*-revision.txt`.
+Обёртка не обновляет работающую установку и не содержит функцию автоматического удаления: это исключает незаметную ротацию ключа, base path или изменение Caddyfile. Сначала тестируйте любые обновления на новой VM. Конкретные upstream revisions записываются после установки в `/var/lib/telegram-webproxy-pub/*-revision.txt`.
 
 По умолчанию загрузка идёт из `master` **на момент установки**. Для управляемого rollout можно задать точные проверенные SHA:
 
