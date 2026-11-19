@@ -100,6 +100,11 @@ if [[ -z "$SITE_DIR" ]]; then
   read -r -p 'Путь к папке сайта с index.html (Enter — временная страница): ' SITE_DIR
 fi
 
+# This script must be executed from a full checkout/archive, not downloaded alone.
+for helper in check-domain.py check-blocklist.py make-link.py; do
+  [[ -f "$PROJECT_DIR/scripts/$helper" ]] || die "Отсутствует scripts/$helper. Скачай весь репозиторий или используй bootstrap.sh."
+done
+
 PHASE='dependencies'
 info 'Базовые зависимости'
 apt-get update
@@ -174,7 +179,10 @@ SECRET="$(openssl rand -hex 16)"
 # Secret only enters upstream stdin; never appears in process arguments or public logs.
 # Do not expose the secret or bearer URL in the upstream installer's terminal output.
 printf '%s\n' "$SECRET" | "$TPROXY_DIR/deploy/install.sh" \
-  --hostname "$DOMAIN" --email "$EMAIL" --site-dir "$SITE_DIR" \
+  --hostname "$DOMAIN" \
+  --email "$EMAIL" \
+  --site-dir "$SITE_DIR" \
+  --base-path none \
   | sed -u -E '/^(Internal mtproxy secret:|Proxy secret:|Proxy link:)/d'
 unset SECRET
 
@@ -302,8 +310,52 @@ PY
   chmod 0755 /usr/local/bin/traffic-guard
 
   PHASE='traffic-guard-apply'
-  info 'Применение ПРОВЕРЕННОГО локального blocklist в TrafficGuard'
-  /usr/local/bin/traffic-guard full -u "file://$STATE_DIR/antiscanner.list"
+  info 'Применение предварительно проверенного блок-листа TrafficGuard'
+  # Serve exactly the downloaded, validated file to TrafficGuard over localhost.
+  # Older TrafficGuard builds reject file:// URLs, and downloading the public
+  # URL again would introduce a mismatch between checked and applied content.
+  python3 - "$STATE_DIR/antiscanner.list" <<'PY_LOCAL_LIST'
+import functools
+import http.server
+import pathlib
+import shutil
+import subprocess
+import sys
+import tempfile
+import threading
+
+source = pathlib.Path(sys.argv[1]).resolve()
+with tempfile.TemporaryDirectory(prefix='tproxy-guard-list-') as temp:
+    directory = pathlib.Path(temp)
+    shutil.copyfile(source, directory / 'antiscanner.list')
+
+    class QuietHandler(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+    handler = functools.partial(QuietHandler, directory=str(directory))
+    server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f'http://127.0.0.1:{server.server_port}/antiscanner.list'
+        subprocess.run(['/usr/local/bin/traffic-guard', 'full', '-u', url], check=True)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+PY_LOCAL_LIST
+
+  V4_COUNT="$(ipset list SCANNERS-BLOCK-V4 | awk '/Number of entries:/ {print $4}')"
+  V6_COUNT="$(ipset list SCANNERS-BLOCK-V6 | awk '/Number of entries:/ {print $4}')"
+  [[ "$V4_COUNT" =~ ^[0-9]+$ && "$V6_COUNT" =~ ^[0-9]+$ ]] || \
+    die 'TrafficGuard: не удалось определить количество заблокированных сетей'
+  if (( V4_COUNT + V6_COUNT == 0 )); then
+    warn 'TrafficGuard создал пустые ipset-наборы. Правила требуют проверки.'
+    die 'TrafficGuard: блок-лист не применён — смотри логи выше; перед повторным запуском удали неполную установку'
+  fi
+
+  info "TrafficGuard: загружено IPv4=$V4_COUNT, IPv6=$V6_COUNT"
   info 'TrafficGuard применён. Проверь SSH со второй сессии!'
 else
   info 'TrafficGuard не активирован; его можно подключить позднее по README.'
